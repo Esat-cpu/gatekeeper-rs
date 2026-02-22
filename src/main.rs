@@ -1,8 +1,8 @@
 use std::io::{self, Write};
-use argon2::{Argon2, PasswordHasher};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
 use rand::thread_rng;
-use std::fs::OpenOptions;
+use std::fs::{self, OpenOptions};
 
 
 fn main() {
@@ -29,7 +29,68 @@ fn main() {
 
 
     if choice == "1" {
-        println!("1");
+        // Check if vault.csv does not exist
+        if !std::path::Path::new("vault.csv").exists() {
+            eprintln!("No users found.");
+            return;
+        }
+
+        // Get username
+        let mut username = String::new();
+
+        print!("Enter your username: ");
+        io::stdout().flush().unwrap();
+
+        io::stdin()
+            .read_line(&mut username)
+            .unwrap();
+
+        let username = username.trim();
+
+
+        // Get password
+        let password = rpassword::prompt_password("Enter your password: ")
+            .unwrap();
+
+
+        // Read the file
+        let content = fs::read_to_string("vault.csv").unwrap();
+
+        // Initialize hash as None
+        let mut hash: Option<&str> = None;
+
+        for line in content.lines() {
+            // split line with '::'
+            let mut parts = line.split("::");
+            let f_username = parts.next().unwrap();
+
+            // Get the hash part if username matches
+            if f_username == username {
+                hash = Some(parts.next().unwrap());
+                break;
+            }
+        }
+
+        match hash {
+            Some(h) => {
+                let parsed_hash = PasswordHash::new(h)
+                    .unwrap();
+
+                let result = Argon2::default()
+                    .verify_password(password.as_bytes(), &parsed_hash);
+
+
+                if result.is_ok() {
+                    println!("Correct!");
+                }
+                else {
+                    println!("Wrong!");
+                }
+            },
+            None => {
+                eprintln!("No user with that name was found.");
+            },
+        }
     }
 
 
@@ -65,7 +126,8 @@ fn main() {
 
         // Get password from user
         let password: String = loop {
-            let pass = rpassword::prompt_password("Enter your password: ").unwrap();
+            let pass = rpassword::prompt_password("Enter your password: ")
+                .unwrap();
 
             if pass.len() < 6 || pass.len() > 50 {
                 eprintln!("Password must be between 6 and 50 characters.");
